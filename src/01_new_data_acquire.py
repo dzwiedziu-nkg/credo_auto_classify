@@ -1,8 +1,7 @@
 """
-Pobranie nowych histów do sklasyfikowania udostępnionych
+Pobranie nowych hitów do sklasyfikowania w formacie JSON lub spakowanym JSON.
 """
-import glob
-from typing import List, Set
+from typing import Set
 
 import requests
 import urllib.request
