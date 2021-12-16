@@ -300,74 +300,84 @@ for row in cursor.fetchall():
 
 
 for fn in glob.glob(ml_source + '*'):
+    print('Load file: %s' % fn)
     detections, count, errors = load_json(fn, load_parser)
-    start_analyze(detections, '')
-    result = ml(detections)
+    print('... there are %d detections with size 60x60 or larger' % len(detections))
 
-    images_list = []
-    for d in detections:
-        if d["metadata"]:
-            metadata = json.loads(d["metadata"])
-        else:
-            metadata = {}
+    if len(detections) > 0:
+        print('... simple classify bu too_bright and too_often ...')
+        start_analyze(detections, '')
 
-        values = (
-            d['id'],
-            d['timestamp'],
-            d['time_received'],
-            d['source'],
-            d['visible'],
+        print('... ML classification ...')
+        result = ml(detections)
 
-            d['device_id'],
-            d['user_id'],
-            d['team_id'],
+        print('... upload hits to DB ...')
+        images_list = []
+        for d in detections:
+            if d["metadata"]:
+                metadata = json.loads(d["metadata"])
+            else:
+                metadata = {}
 
-            d['accuracy'],
-            d['altitude'],
-            d['latitude'],
-            d['longitude'],
-            d['provider'],
-
-            d['frame_content'],
-            d['height'],
-            d['width'],
-            d['x'],
-            d['y'],
-
-            metadata.get('max'),
-            metadata.get('average'),
-            metadata.get('blacks'),
-            metadata.get('black_threshold'),
-            metadata.get('ax'),
-            metadata.get('ay'),
-            metadata.get('az'),
-            metadata.get('orientation'),
-            metadata.get('temperature'),
-
-            d['ML_score']
-        )
-        images_list.append(values)
-
-    # sql = 'INSERT INTO images(id, timestamp, time_received, source, visible, device_id, user_id, team_id, accuracy, altitude, latitude, longitude, provider, frame_content, height, width, x, y, metadata_max, metadata_average, metadata_blacks, metadata_black_threshold, metadata_ax, metadata_ay, metadata_az, metadata_orientation, metadata_temperature, ml_score) VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'
-    # cursor.executemany(sql, images_list)
-    # conn.commit()
-
-    classifications_list = []
-    for _id, outs in result.items():
-        for _class, value in outs.items():
-            if _class == 'dobry_kandydat':
-                continue
-            num, _type = value.split(',')
-            if classifiers[_class]['type'] == 0 and _type == 'artefact':
-                num = 3
             values = (
-                _id,
-                classifiers[_class]['id'],
-                num
+                d['id'],
+                d['timestamp'],
+                d['time_received'],
+                d['source'],
+                d['visible'],
+
+                d['device_id'],
+                d['user_id'],
+                d['team_id'],
+
+                d['accuracy'],
+                d['altitude'],
+                d['latitude'],
+                d['longitude'],
+                d['provider'],
+
+                d['frame_content'],
+                d['height'],
+                d['width'],
+                d['x'],
+                d['y'],
+
+                metadata.get('max'),
+                metadata.get('average'),
+                metadata.get('blacks'),
+                metadata.get('black_threshold'),
+                metadata.get('ax'),
+                metadata.get('ay'),
+                metadata.get('az'),
+                metadata.get('orientation'),
+                metadata.get('temperature'),
+
+                d['ML_score']
             )
-            classifications_list.append(values)
-    sql = 'INSERT INTO classifications(id, id_classifier, id_class) VALUES(%s, %s, %s)'
-    cursor.executemany(sql, classifications_list)
-    conn.commit()
+            images_list.append(values)
+
+        sql = 'INSERT INTO images(id, timestamp, time_received, source, visible, device_id, user_id, team_id, accuracy, altitude, latitude, longitude, provider, frame_content, height, width, x, y, metadata_max, metadata_average, metadata_blacks, metadata_black_threshold, metadata_ax, metadata_ay, metadata_az, metadata_orientation, metadata_temperature, ml_score) VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'
+        cursor.executemany(sql, images_list)
+        conn.commit()
+
+        print('... upload classifications of hits to DB ...')
+        classifications_list = []
+        for _id, outs in result.items():
+            for _class, value in outs.items():
+                if _class == 'dobry_kandydat':
+                    continue
+                num, _type = value.split(',')
+                if classifiers[_class]['type'] == 0 and _type == 'artefact':
+                    num = 3
+                values = (
+                    _id,
+                    classifiers[_class]['id'],
+                    num
+                )
+                classifications_list.append(values)
+        sql = 'INSERT INTO classifications(id, id_classifier, id_class) VALUES(%s, %s, %s)'
+        cursor.executemany(sql, classifications_list)
+        conn.commit()
 
     os.remove(fn)
+    print('... file %s done and remove' % fn)
