@@ -11,10 +11,11 @@ import json
 import glob
 import numpy as np
 import psycopg2
+from psycopg2 import extras
 import joblib
 from joblib import dump, load
 #import cpickle
-
+from commons import get_formatted_time
 from path_links import main_path,png_detections_path,good_detections_path
 
 from io import BytesIO
@@ -300,18 +301,18 @@ for row in cursor.fetchall():
 
 
 for fn in glob.glob(ml_source + '*'):
-    print('Load file: %s' % fn)
+    print(get_formatted_time() + ' Load file: %s' % fn)
     detections, count, errors = load_json(fn, load_parser)
-    print('... there are %d detections with size 60x60 or larger' % len(detections))
+    print(get_formatted_time() + ' ... there are %d detections with size 60x60 or larger' % len(detections))
 
     if len(detections) > 0:
-        print('... simple classify bu too_bright and too_often ...')
+        print(get_formatted_time() + ' ... simple classify bu too_bright and too_often ...')
         start_analyze(detections, '')
 
-        print('... ML classification ...')
+        print(get_formatted_time() + ' ... ML classification ...')
         result = ml(detections)
 
-        print('... upload hits to DB ...')
+        print(get_formatted_time() + ' ... upload hits to DB, prepare ...')
         images_list = []
         for d in detections:
             if d["metadata"]:
@@ -356,11 +357,12 @@ for fn in glob.glob(ml_source + '*'):
             )
             images_list.append(values)
 
-        sql = 'INSERT INTO images(id, timestamp, time_received, source, visible, device_id, user_id, team_id, accuracy, altitude, latitude, longitude, provider, frame_content, height, width, x, y, metadata_max, metadata_average, metadata_blacks, metadata_black_threshold, metadata_ax, metadata_ay, metadata_az, metadata_orientation, metadata_temperature, ml_score) VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'
-        cursor.executemany(sql, images_list)
+        sql = 'INSERT INTO images(id, timestamp, time_received, source, visible, device_id, user_id, team_id, accuracy, altitude, latitude, longitude, provider, frame_content, height, width, x, y, metadata_max, metadata_average, metadata_blacks, metadata_black_threshold, metadata_ax, metadata_ay, metadata_az, metadata_orientation, metadata_temperature, ml_score) VALUES %s'
+        print(get_formatted_time() + ' ... upload hits to DB, execute %d ...' % len(images_list))
+        extras.execute_values(cursor, sql, images_list, template=None, page_size=100)
         conn.commit()
 
-        print('... upload classifications of hits to DB ...')
+        print(get_formatted_time() + ' ... upload classifications of hits to DB, prepare ...')
         classifications_list = []
         for _id, outs in result.items():
             for _class, value in outs.items():
@@ -375,9 +377,10 @@ for fn in glob.glob(ml_source + '*'):
                     num
                 )
                 classifications_list.append(values)
-        sql = 'INSERT INTO classifications(id, id_classifier, id_class) VALUES(%s, %s, %s)'
-        cursor.executemany(sql, classifications_list)
+        sql = 'INSERT INTO classifications(id, id_classifier, id_class) VALUES %s'
+        print(get_formatted_time() + ' ... upload classifications of hits to DB, execute: %d ...' % len(classifications_list))
+        extras.execute_values(cursor, sql, classifications_list, template=None, page_size=100)
         conn.commit()
 
     os.remove(fn)
-    print('... file %s done and remove' % fn)
+    print(get_formatted_time() + ' ... file %s done and remove' % fn)

@@ -76,7 +76,7 @@ for url in file_list:
     fn = url.split('/')[-1]
 
     # ściągnięcie do pliku
-    print('Download file: %s...' % url)
+    print(get_formatted_time() + ' Download file: %s...' % url)
     dest = os.path.join(new_data_acquire_destination, fn)
     urllib.request.urlretrieve(url, dest)
 
@@ -85,4 +85,4 @@ for url in file_list:
 
 # dopisanie ściągniętych do listy aby ich więcej nie ściągać
 append_lines_to_file(new_data_acquire_done, done_list)
-print('... done of all downloads')
+print(get_formatted_time() + ' ... done of all downloads')
