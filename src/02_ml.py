@@ -302,18 +302,25 @@ for row in cursor.fetchall():
 
 for fn in glob.glob(ml_source + '*'):
     print(get_formatted_time() + ' Load file: %s' % fn)
-    detections, count, errors = load_json(fn, load_parser)
-    print(get_formatted_time() + ' ... there are %d detections with size 60x60 or larger' % len(detections))
+    all_detections, count, errors = load_json(fn, load_parser)
+    print(get_formatted_time() + ' ... there are %d detections with size 60x60 or larger' % len(all_detections))
 
-    if len(detections) > 0:
-        print(get_formatted_time() + ' ... simple classify bu too_bright and too_often ...')
-        start_analyze(detections, '')
+    print(get_formatted_time() + ' ... simple classify bu too_bright and too_often ...')
+    start_analyze(all_detections, '')
+
+    images_list = []
+    classifications_list = []
+
+    pos = 0
+    window = 5000
+    while pos < len(all_detections):
+        detections = all_detections[pos:min(pos + window, len(all_detections))]
+        pos += window
 
         print(get_formatted_time() + ' ... ML classification ...')
         result = ml(detections)
 
         print(get_formatted_time() + ' ... upload hits to DB, prepare ...')
-        images_list = []
         for d in detections:
             if d["metadata"]:
                 metadata = json.loads(d["metadata"])
@@ -357,13 +364,7 @@ for fn in glob.glob(ml_source + '*'):
             )
             images_list.append(values)
 
-        sql = 'INSERT INTO images(id, timestamp, time_received, source, visible, device_id, user_id, team_id, accuracy, altitude, latitude, longitude, provider, frame_content, height, width, x, y, metadata_max, metadata_average, metadata_blacks, metadata_black_threshold, metadata_ax, metadata_ay, metadata_az, metadata_orientation, metadata_temperature, ml_score) VALUES %s'
-        print(get_formatted_time() + ' ... upload hits to DB, execute %d ...' % len(images_list))
-        extras.execute_values(cursor, sql, images_list, template=None, page_size=100)
-        conn.commit()
-
         print(get_formatted_time() + ' ... upload classifications of hits to DB, prepare ...')
-        classifications_list = []
         for _id, outs in result.items():
             for _class, value in outs.items():
                 if _class == 'dobry_kandydat':
@@ -377,6 +378,13 @@ for fn in glob.glob(ml_source + '*'):
                     num
                 )
                 classifications_list.append(values)
+
+    if len(images_list) > 0:
+        sql = 'INSERT INTO images(id, timestamp, time_received, source, visible, device_id, user_id, team_id, accuracy, altitude, latitude, longitude, provider, frame_content, height, width, x, y, metadata_max, metadata_average, metadata_blacks, metadata_black_threshold, metadata_ax, metadata_ay, metadata_az, metadata_orientation, metadata_temperature, ml_score) VALUES %s'
+        print(get_formatted_time() + ' ... upload hits to DB, execute %d ...' % len(images_list))
+        extras.execute_values(cursor, sql, images_list, template=None, page_size=100)
+        conn.commit()
+
         sql = 'INSERT INTO classifications(id, id_classifier, id_class) VALUES %s'
         print(get_formatted_time() + ' ... upload classifications of hits to DB, execute: %d ...' % len(classifications_list))
         extras.execute_values(cursor, sql, classifications_list, template=None, page_size=100)
